@@ -32,22 +32,12 @@ import com.getcapacitor.annotation.Permission;
 )
 public class Camera2Plugin extends Plugin implements Camera2Activity.Camera2EventListeners {
     static final String CAMERA_PERMISSION_ALIAS = "camera";
-    private Camera2Activity camera2;
     private final int containerViewId = 20;
-
-    @PluginMethod
-    public void echo(PluginCall call) {
-        String value = call.getString("value");
-        assert value != null;
-
-        JSObject ret = new JSObject();
-        Log.i("Echo", value);
-        ret.put("value", value);
-        call.resolve(ret);
-    }
-
-    private String startCallbackId;
     private int previousOrientationRequest = -1;
+
+    private Camera2Activity camera2;
+    
+    private String startCallbackId;
 
     @PluginMethod
     public void start(PluginCall call) {

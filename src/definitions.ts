@@ -9,8 +9,6 @@ type Camera2Options = {
 };
 
 export interface Camera2Plugin {
-  echo(options: { value: string }): Promise<{ value: string }>;
-
   start(options: Camera2Options): Promise<void>;
   stop(): Promise<void>;
 }
