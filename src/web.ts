@@ -14,4 +14,15 @@ export class Camera2Web extends WebPlugin implements Camera2Plugin {
 
   start = noop('start');
   stop = noop('stop');
+
+  setViewFinderSize = noop('setViewFinderSize');
+
+  getShutterSpeedRange = noop('getShutterSpeedRange');
+  setShutterSpeed = noop('setShutterSpeed');
+
+  getApertureRange = noop('getApertureRange');
+  setAperture = noop('setAperture');
+
+  getIsoRange = noop('getIsoRange');
+  setIso = noop('setIso');
 }
