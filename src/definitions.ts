@@ -11,6 +11,19 @@ type Camera2Options = {
 export interface Camera2Plugin {
   start(options: Camera2Options): Promise<void>;
   stop(): Promise<void>;
+  capture(options: {
+    picturePath: string
+    thumbnailPath?: string
+    thumbnailWidth?: number
+    thumbnailHeight?: number
+    thumbnailQuality?: number
+  }): Promise<void>;
+  pictureToThumbnail(options: {
+    picture: string,
+    width: number,
+    height: number,
+    quality?: number,
+  }): Promise<{ thumbnail: string }>;
 
   setViewFinderSize(options: { width: number; height: number }): Promise<void>;
 

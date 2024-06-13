@@ -4,8 +4,11 @@ import static android.Manifest.permission.CAMERA;
 
 import android.annotation.SuppressLint;
 import android.content.pm.ActivityInfo;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Point;
+import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Range;
@@ -30,6 +33,8 @@ import com.getcapacitor.annotation.Permission;
 
 import org.json.JSONException;
 
+import java.io.ByteArrayOutputStream;
+
 @CapacitorPlugin(
         name = "Camera2",
         permissions = { @Permission(strings = { CAMERA }, alias = Camera2Plugin.CAMERA_PERMISSION_ALIAS) }
@@ -47,6 +52,7 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
     private DisplayMetrics metrics;
     private boolean toBack;
     private String startCallbackId;
+    private String captureCallbackId;
 
     @PluginMethod
     public void start(PluginCall call) {
@@ -192,13 +198,77 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
     }
 
     @PluginMethod
+    public void capture(PluginCall call) {
+        if (!isRunningOrReject(call)) return;
+
+        bridge.saveCall(call);
+        captureCallbackId = call.getCallbackId();
+
+        String picturePath = call.getString("picturePath", "_tmp.jpg");
+        String thumbnailPath = call.getString("thumbnailPath");
+        Integer thumbnailWidth = call.getInt("thumbnailWidth");
+        Integer thumbnailHeight = call.getInt("thumbnailHeight");
+        Integer thumbnailQuality = call.getInt("thumbnailQuality", 80);
+
+        if (thumbnailPath != null && thumbnailWidth != null && thumbnailWidth > 0 && thumbnailHeight != null && thumbnailHeight > 0) {
+            camera2.takePicture(picturePath, thumbnailPath, thumbnailWidth, thumbnailHeight, thumbnailQuality);
+        } else {
+            camera2.takePicture(picturePath);
+        }
+
+    }
+
+    public void onCapture() {
+        resolveCallbackId(captureCallbackId);
+        captureCallbackId = null;
+    }
+
+    @PluginMethod
+    public void pictureToThumbnail(PluginCall call) {
+        String picture = call.getString("picture");
+        Integer width = call.getInt("width", 0);
+        Integer height = call.getInt("height", 0);
+        Integer quality = call.getInt("quality", 80);
+
+        if (picture == null) {
+            call.reject("Picture is required.");
+            return;
+        }
+        if (width == null || width <= 0 || height == null || height <= 0) {
+            call.reject("Invalid width or height.");
+            return;
+        }
+
+        try {
+            // Decode base64 to Bitmap
+            byte[] decodedString = Base64.decode(picture, Base64.DEFAULT);
+            Bitmap originalBitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+
+            // Resize the Bitmap
+            Bitmap resizedBitmap = Bitmap.createScaledBitmap(originalBitmap, width, height, true);
+
+            // Convert Bitmap to base64
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, quality == null ? 80 : quality, byteArrayOutputStream);
+            byte[] byteArray = byteArrayOutputStream.toByteArray();
+            String resizedBase64String = Base64.encodeToString(byteArray, Base64.DEFAULT);
+
+            // Return the resized base64 string
+            JSObject result = new JSObject();
+            result.put("thumbnail", resizedBase64String);
+            call.resolve(result);
+
+        } catch (Exception e) {
+            call.reject("Error resizing image: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
     public void setViewFinderSize(PluginCall call) {
         if (!isRunningOrReject(call)) return;
 
         Float width = call.getFloat("width", 0F);
         Float height = call.getFloat("height", 0F);
-
-        Log.e(TAG, "width: " + width + ", height: " + height);
 
         if (width != null && width > 0 && height != null && height > 0) {
             camera2.setViewFinderSize(

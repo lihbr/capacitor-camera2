@@ -14,6 +14,8 @@ export class Camera2Web extends WebPlugin implements Camera2Plugin {
 
   start = noop('start');
   stop = noop('stop');
+  capture = noop('capture');
+  pictureToThumbnail = noop('pictureToThumbnail');
 
   setViewFinderSize = noop('setViewFinderSize');
 

@@ -21,6 +21,15 @@ npx cap sync
 
 * [`start(...)`](#start)
 * [`stop()`](#stop)
+* [`capture(...)`](#capture)
+* [`pictureToThumbnail(...)`](#picturetothumbnail)
+* [`setViewFinderSize(...)`](#setviewfindersize)
+* [`getShutterSpeedRange()`](#getshutterspeedrange)
+* [`setShutterSpeed(...)`](#setshutterspeed)
+* [`getApertureRange()`](#getaperturerange)
+* [`setAperture(...)`](#setaperture)
+* [`getIsoRange()`](#getisorange)
+* [`setIso(...)`](#setiso)
 * [Type Aliases](#type-aliases)
 
 </docgen-index>
@@ -48,6 +57,129 @@ start(options: Camera2Options) => any
 ```typescript
 stop() => any
 ```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### capture(...)
+
+```typescript
+capture(options: { picturePath: string; thumbnailPath?: string; thumbnailWidth?: number; thumbnailHeight?: number; thumbnailQuality?: number; }) => any
+```
+
+| Param         | Type                                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`options`** | <code>{ picturePath: string; thumbnailPath?: string; thumbnailWidth?: number; thumbnailHeight?: number; thumbnailQuality?: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### pictureToThumbnail(...)
+
+```typescript
+pictureToThumbnail(options: { picture: string; width: number; height: number; quality?: number; }) => any
+```
+
+| Param         | Type                                                                               |
+| ------------- | ---------------------------------------------------------------------------------- |
+| **`options`** | <code>{ picture: string; width: number; height: number; quality?: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### setViewFinderSize(...)
+
+```typescript
+setViewFinderSize(options: { width: number; height: number; }) => any
+```
+
+| Param         | Type                                            |
+| ------------- | ----------------------------------------------- |
+| **`options`** | <code>{ width: number; height: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### getShutterSpeedRange()
+
+```typescript
+getShutterSpeedRange() => any
+```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### setShutterSpeed(...)
+
+```typescript
+setShutterSpeed(options: { value: number; }) => any
+```
+
+| Param         | Type                            |
+| ------------- | ------------------------------- |
+| **`options`** | <code>{ value: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### getApertureRange()
+
+```typescript
+getApertureRange() => any
+```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### setAperture(...)
+
+```typescript
+setAperture(options: { value: number; }) => any
+```
+
+| Param         | Type                            |
+| ------------- | ------------------------------- |
+| **`options`** | <code>{ value: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### getIsoRange()
+
+```typescript
+getIsoRange() => any
+```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### setIso(...)
+
+```typescript
+setIso(options: { value: number; }) => any
+```
+
+| Param         | Type                            |
+| ------------- | ------------------------------- |
+| **`options`** | <code>{ value: number; }</code> |
 
 **Returns:** <code>any</code>
 

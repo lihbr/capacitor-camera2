@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Point;
@@ -24,8 +26,10 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.util.Base64;
 import android.util.Log;
 import android.util.Range;
 import android.util.Size;
@@ -41,6 +45,7 @@ import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -56,6 +61,7 @@ import java.util.concurrent.TimeUnit;
 public class Camera2Fragment extends Fragment {
     public interface Camera2EventListeners {
         void onStart();
+        void onCapture();
     }
 
     private final Camera2EventListeners eventListeners;
@@ -123,14 +129,12 @@ public class Camera2Fragment extends Fragment {
         public void onSurfaceTextureAvailable(@NonNull SurfaceTexture texture, int width, int height) {
             if (vfWidth != 0 && vfHeight != 0) {
                 setViewFinderSize(vfWidth, vfHeight);
-                Log.e(TAG, "onSurfaceTextureAvailable");
             }
             openCamera(vfWidth > 0 ? vfWidth : width, vfHeight > 0 ? vfHeight : height);
         }
 
         @Override
         public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture texture, int width, int height) {
-            Log.e(TAG, "onSurfaceTextureSizeChanged, width: " + width + ", height: " + height);
             configureTransform(width, height);
         }
 
@@ -221,18 +225,31 @@ public class Camera2Fragment extends Fragment {
     /**
      * This is the output file for our picture.
      */
-    private File mFile;
+    private File mPicture;
+    private File mThumbnail;
+    private Integer mThumbnailWidth;
+    private Integer mThumbnailHeight;
+    private Integer mThumbnailQuality;
 
     /**
      * This a callback object for the {@link ImageReader}. "onImageAvailable" will be called when a
      * still image is ready to be saved.
      */
-    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
-            = new ImageReader.OnImageAvailableListener() {
+    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
 
         @Override
         public void onImageAvailable(ImageReader reader) {
-            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
+            mBackgroundHandler.post(
+                    new ImageSaver(
+                            reader.acquireNextImage(),
+                            mPicture,
+                            (float) vfWidth / vfHeight,
+                            mThumbnail,
+                            mThumbnailWidth,
+                            mThumbnailHeight,
+                            mThumbnailQuality
+                    )
+            );
         }
 
     };
@@ -278,19 +295,20 @@ public class Camera2Fragment extends Fragment {
             switch (mState) {
                 case STATE_PREVIEW: {
                     // We have nothing to do when the camera preview is working normally.
-                    //captureStillPicture();
                     break;
                 }
                 case STATE_WAITING_LOCK: {
                     Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
                     if (afState == null) {
                         captureStillPicture();
-                    } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
-                            CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState) {
+                    } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState || CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState) {
                         // CONTROL_AE_STATE can be null on some devices
                         Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
-                        if (aeState == null ||
-                                aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
+                        if (
+                                aeState == null
+                                || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED
+                                || (seekIso != -1 || seekSs != -1)
+                        ) {
                             mState = STATE_PICTURE_TAKEN;
                             captureStillPicture();
                         } else {
@@ -302,9 +320,8 @@ public class Camera2Fragment extends Fragment {
                 case STATE_WAITING_PRECAPTURE: {
                     // CONTROL_AE_STATE can be null on some devices
                     Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
-                    if (aeState == null ||
-                            aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE ||
-                            aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED) {
+
+                    if (aeState == null || aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE || aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED) {
                         mState = STATE_WAITING_NON_PRECAPTURE;
                     }
                     break;
@@ -475,9 +492,6 @@ public class Camera2Fragment extends Fragment {
         Activity activity = getActivity();
         assert activity != null;
 
-        // TODO: We need to move this somewhere more clever
-        mFile = new File(activity.getExternalFilesDir(null), "pic.jpg");
-
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
@@ -500,8 +514,6 @@ public class Camera2Fragment extends Fragment {
                 Size largest = Collections.max(
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new CompareSizesByArea());
-
-                Log.e("DEBUG", "Min Duration: " + map.getOutputMinFrameDuration(ImageFormat.JPEG, largest));
 
                 mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(), ImageFormat.JPEG, /*maxImages*/2);
                 mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
@@ -649,7 +661,6 @@ public class Camera2Fragment extends Fragment {
                     public void run() {
                         mTextureView.setLayoutParams(new ViewGroup.LayoutParams(width, height));
                         mTextureView.setAspectRatio(width, height);
-                        Log.e(TAG, "setViewFinderSize, width: " + width + ", height: " + height);
                     }
                 });
             }
@@ -685,7 +696,21 @@ public class Camera2Fragment extends Fragment {
     /**
      * Initiate a still image capture.
      */
-    public void takePicture() {
+    public void takePicture(String picturePath) {
+        mPicture = new File(Environment.getExternalStorageDirectory(), picturePath);
+        mThumbnail = null;
+        mThumbnailWidth = null;
+        mThumbnailHeight = null;
+        mThumbnailQuality = null;
+        lockFocus();
+    }
+
+    public void takePicture(String picturePath, String thumbnailPath, Integer thumbnailWidth, Integer thumbnailHeight, Integer thumbnailQuality) {
+        mPicture = new File(Environment.getExternalStorageDirectory(), picturePath);
+        mThumbnail = new File(Environment.getExternalStorageDirectory(), thumbnailPath);
+        mThumbnailWidth = thumbnailWidth;
+        mThumbnailHeight = thumbnailHeight;
+        mThumbnailQuality = thumbnailQuality;
         lockFocus();
     }
 
@@ -753,21 +778,9 @@ public class Camera2Fragment extends Fragment {
                             try {
                                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
 
-                                if (seekSs == -1 && seekIso == -1) {
-                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-                                } else {
-                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-                                    if (seekSs != -1) mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
-                                    if (seekIso != -1) mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
-                                }
-
-                                // Auto focus should be continuous for camera preview.
-                                if (seekFocus == -1) {
-                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-                                } else {
-                                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-                                    mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, seekFocus);
-                                }
+                                setCaptureBuilderSs(mPreviewRequestBuilder);
+                                setCaptureBuilderIso(mPreviewRequestBuilder);
+                                setCaptureBuilderFocus(mPreviewRequestBuilder);
 
                                 // TODO: White balance
                                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
@@ -802,16 +815,7 @@ public class Camera2Fragment extends Fragment {
 
     private void createCameraPreviewSession_Ss() {
         try {
-            //mPreviewRequestBuilder.set(CaptureRequest.COLOR_CORRECTION_GAINS, colorTemperature(seekWb));
-
-            if (seekSs == -1 && seekIso == -1) {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-            } else {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-                if (seekSs != -1) mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
-                if (seekIso != -1) mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
-            }
-
+            setCaptureBuilderSs(mPreviewRequestBuilder);
             mPreviewRequest = mPreviewRequestBuilder.build();
             mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
 
@@ -820,14 +824,7 @@ public class Camera2Fragment extends Fragment {
 
     private void createCameraPreviewSession_iso() {
         try {
-            if (seekSs == -1 && seekIso == -1) {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-            } else {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-                if (seekSs != -1) mPreviewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
-                if (seekIso != -1) mPreviewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
-            }
-
+            setCaptureBuilderIso(mPreviewRequestBuilder);
             mPreviewRequest = mPreviewRequestBuilder.build();
             mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
         }catch (CameraAccessException ignored) {}
@@ -835,13 +832,7 @@ public class Camera2Fragment extends Fragment {
 
     private void createCameraPreviewSession_focus() {
         try {
-            if (seekFocus == -1) {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
-            } else {
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-                mPreviewRequestBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, seekFocus);
-            }
-
+            setCaptureBuilderFocus(mPreviewRequestBuilder);
             mPreviewRequest = mPreviewRequestBuilder.build();
             mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
         } catch (CameraAccessException ignored) {}
@@ -897,7 +888,6 @@ public class Camera2Fragment extends Fragment {
                 blue = 255;
         }
 
-        Log.v(TAG, "red=" + red + ", green=" + green + ", blue=" + blue);
         return new RggbChannelVector((red / 255) * 2, (green / 255), (green / 255), (blue / 255) * 2);
     }
 
@@ -942,12 +932,6 @@ public class Camera2Fragment extends Fragment {
             scale = new PointF(1f, (viewRect.width() / viewRect.height()) * ((float) bufferRect.width() / (float) bufferRect.height()));
         }
 
-        Log.e(TAG,
-                "vfWidth: " + vfWidth + ", vfHeight: " + vfHeight
-                        + ", scaleX: " + scale.x + ", scaleY: " + scale.y
-                        + ", previewWidth: " + bufferRect.width() + ", previewHeight: " + bufferRect.height()
-        );
-
         if (rotationDegrees % 180 != 0) {
             // If we need to rotate the texture 90º we need to adjust the scale
             float multiplier = viewAspectRatio < imageAspectRatio ? w/h : h/w;
@@ -983,8 +967,7 @@ public class Camera2Fragment extends Fragment {
     private void lockFocus() {
         try {
             // This is how to tell the camera to lock focus.
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_START);
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
             // Tell #mCaptureCallback to wait for the lock.
             mState = STATE_WAITING_LOCK;
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, mBackgroundHandler);
@@ -1001,8 +984,7 @@ public class Camera2Fragment extends Fragment {
     private void runPrecaptureSequence() {
         try {
             // This is how to tell the camera to trigger.
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
-                    CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER, CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START);
             // Tell #mCaptureCallback to wait for the precapture sequence to be set.
             mState = STATE_WAITING_PRECAPTURE;
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, mBackgroundHandler);
@@ -1024,35 +1006,30 @@ public class Camera2Fragment extends Fragment {
                 return;
             }
             // This is the CaptureRequest.Builder that we use to take a picture.
-            captureBuilder =
-                    mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            captureBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
             captureBuilder.addTarget(mImageReader.getSurface());
 
-            // Use the same AE and AF modes as the preview.
-            /*captureBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);*/
-            /*captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+            captureBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
 
-            minFocus = (5.0f * minFocus / 100);
+            setCaptureBuilderSs(captureBuilder);
+            setCaptureBuilderIso(captureBuilder);
+            setCaptureBuilderFocus(captureBuilder);
 
-            captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, minFocus);*/
-
-            setAutoFlash(captureBuilder);
+            // TODO: White balance
+            captureBuilder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
 
             // Orientation
             int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
 
-            CameraCaptureSession.CaptureCallback CaptureCallback
-                    = new CameraCaptureSession.CaptureCallback() {
+            CameraCaptureSession.CaptureCallback CaptureCallback = new CameraCaptureSession.CaptureCallback() {
 
                 @Override
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session,
                                                @NonNull CaptureRequest request,
                                                @NonNull TotalCaptureResult result) {
-                    showToast("Saved: " + mFile);
-                    Log.d(TAG, mFile.toString());
-                    unlockFocus();
+                Log.d(TAG, mPicture.toString());
+                unlockFocus();
                 }
             };
 
@@ -1087,7 +1064,7 @@ public class Camera2Fragment extends Fragment {
             // Reset the auto-focus trigger
             mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
                     CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-            setAutoFlash(mPreviewRequestBuilder);
+            // setAutoFlash(mPreviewRequestBuilder);
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, mBackgroundHandler);
             // After this, the camera will go back to the normal state of preview.
             mState = STATE_PREVIEW;
@@ -1095,12 +1072,46 @@ public class Camera2Fragment extends Fragment {
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+        eventListeners.onCapture();
     }
 
     private void setAutoFlash(CaptureRequest.Builder requestBuilder) {
         if (mFlashSupported) {
             requestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                     CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
+        }
+    }
+
+    private void setCaptureBuilderSs(CaptureRequest.Builder captureBuilder) {
+        //mPreviewRequestBuilder.set(CaptureRequest.COLOR_CORRECTION_GAINS, colorTemperature(seekWb));
+
+        if (seekSs == -1 && seekIso == -1) {
+            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+        } else {
+            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+            if (seekSs != -1) captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
+            if (seekIso != -1) captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
+        }
+    }
+
+    private void setCaptureBuilderIso(CaptureRequest.Builder captureBuilder) {
+        if (seekSs == -1 && seekIso == -1) {
+            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+        } else {
+            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+            if (seekSs != -1) captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
+            if (seekIso != -1) captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
+        }
+    }
+
+    private void setCaptureBuilderFocus(CaptureRequest.Builder captureBuilder) {
+        if (seekFocus == -1) {
+            Log.e(TAG, "autofocus enable");
+            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+        } else {
+            Log.e(TAG, "autofocus disabled");
+            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+            captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, seekFocus);
         }
     }
 
@@ -1116,23 +1127,65 @@ public class Camera2Fragment extends Fragment {
         /**
          * The file we save the image into.
          */
-        private final File mFile;
+        private final File mPicture;
+        private final Float mRatio;
+        private final File mThumbnail;
+        private final Integer mThumbnailWidth;
+        private final Integer mThumbnailHeight;
+        private final Integer mThumbnailQuality;
 
-        public ImageSaver(Image image, File file) {
+        public ImageSaver(Image image, File picture, Float ratio, File thumbnail, Integer thumbnailWidth, Integer thumbnailHeight, Integer thumbnailQuality) {
             mImage = image;
-            mFile = file;
+            mPicture = picture;
+            mRatio = ratio;
+            mThumbnail = thumbnail;
+            mThumbnailWidth = thumbnailWidth;
+            mThumbnailHeight = thumbnailHeight;
+            mThumbnailQuality = thumbnailQuality;
         }
 
         @Override
         @SuppressWarnings({"CallToPrintStackTrace"})
         public void run() {
             ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
-            byte[] bytes = new byte[buffer.remaining()];
+            byte[] bytes = new byte[buffer.capacity()];
             buffer.get(bytes);
+
+            // Crop image to aspect ratio
+            Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+
+            // Original image dimensions
+            int originalWidth = bitmap.getWidth();
+            int originalHeight = bitmap.getHeight();
+
+            // Desired aspect ratio
+
+            // Calculate the desired crop dimensions
+            int desiredWidth = originalWidth;
+            int desiredHeight = (int) (originalWidth / mRatio);
+
+            if (desiredHeight > originalHeight) {
+                desiredHeight = originalHeight;
+                desiredWidth = (int) (originalHeight * mRatio);
+            }
+
+            // Calculate the starting points for cropping (centered)
+            int startX = (originalWidth - desiredWidth) / 2;
+            int startY = (originalHeight - desiredHeight) / 2;
+
+            Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, startX, startY, desiredWidth, desiredHeight);
+
             FileOutputStream output = null;
             try {
-                output = new FileOutputStream(mFile);
-                output.write(bytes);
+                output = new FileOutputStream(mPicture);
+                croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, output);
+
+                if (mThumbnail != null && mThumbnailWidth != null && mThumbnailWidth > 0 && mThumbnailHeight != null && mThumbnailHeight > 0) {
+                    Bitmap resizedBitmap = Bitmap.createScaledBitmap(croppedBitmap, mThumbnailWidth, mThumbnailHeight, true);
+
+                    FileOutputStream thumbnailOutput = new FileOutputStream(mThumbnail);
+                    resizedBitmap.compress(Bitmap.CompressFormat.JPEG, mThumbnailQuality == null ? 80 : mThumbnailQuality, thumbnailOutput);
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             } finally {
@@ -1153,7 +1206,6 @@ public class Camera2Fragment extends Fragment {
      * Compares two {@code Size}s based on their areas.
      */
     static class CompareSizesByArea implements Comparator<Size> {
-
         @Override
         public int compare(Size lhs, Size rhs) {
             // We cast here to ensure the multiplications won't overflow
