@@ -8,6 +8,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Point;
+import android.hardware.camera2.CaptureResult;
+import android.os.Environment;
 import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -19,6 +21,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
+import androidx.exifinterface.media.ExifInterface;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
@@ -34,6 +37,8 @@ import com.getcapacitor.annotation.Permission;
 import org.json.JSONException;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
 
 @CapacitorPlugin(
         name = "Camera2",
@@ -224,46 +229,6 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
     }
 
     @PluginMethod
-    public void pictureToThumbnail(PluginCall call) {
-        String picture = call.getString("picture");
-        Integer width = call.getInt("width", 0);
-        Integer height = call.getInt("height", 0);
-        Integer quality = call.getInt("quality", 80);
-
-        if (picture == null) {
-            call.reject("Picture is required.");
-            return;
-        }
-        if (width == null || width <= 0 || height == null || height <= 0) {
-            call.reject("Invalid width or height.");
-            return;
-        }
-
-        try {
-            // Decode base64 to Bitmap
-            byte[] decodedString = Base64.decode(picture, Base64.DEFAULT);
-            Bitmap originalBitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-
-            // Resize the Bitmap
-            Bitmap resizedBitmap = Bitmap.createScaledBitmap(originalBitmap, width, height, true);
-
-            // Convert Bitmap to base64
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, quality == null ? 80 : quality, byteArrayOutputStream);
-            byte[] byteArray = byteArrayOutputStream.toByteArray();
-            String resizedBase64String = Base64.encodeToString(byteArray, Base64.DEFAULT);
-
-            // Return the resized base64 string
-            JSObject result = new JSObject();
-            result.put("thumbnail", resizedBase64String);
-            call.resolve(result);
-
-        } catch (Exception e) {
-            call.reject("Error resizing image: " + e.getMessage());
-        }
-    }
-
-    @PluginMethod
     public void setViewFinderSize(PluginCall call) {
         if (!isRunningOrReject(call)) return;
 
@@ -351,6 +316,80 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
         }
 
         call.resolve();
+    }
+
+    @PluginMethod
+    public void pictureToThumbnail(PluginCall call) {
+        String picture = call.getString("picture");
+        Integer width = call.getInt("width", 0);
+        Integer height = call.getInt("height", 0);
+        Integer quality = call.getInt("quality", 80);
+
+        if (picture == null) {
+            call.reject("Picture is required.");
+            return;
+        }
+        if (width == null || width <= 0 || height == null || height <= 0) {
+            call.reject("Invalid width or height.");
+            return;
+        }
+
+        try {
+            // Decode base64 to Bitmap
+            byte[] decodedString = Base64.decode(picture, Base64.DEFAULT);
+            Bitmap originalBitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+
+            // Resize the Bitmap
+            Bitmap resizedBitmap = Bitmap.createScaledBitmap(originalBitmap, width, height, true);
+
+            // Convert Bitmap to base64
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, quality == null ? 80 : quality, byteArrayOutputStream);
+            byte[] byteArray = byteArrayOutputStream.toByteArray();
+            String resizedBase64String = Base64.encodeToString(byteArray, Base64.DEFAULT);
+
+            // Return the resized base64 string
+            JSObject result = new JSObject();
+            result.put("thumbnail", resizedBase64String);
+            call.resolve(result);
+
+        } catch (Exception e) {
+            call.reject("Error resizing image: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void getExifData(PluginCall call) {
+        String path = call.getString("path");
+
+        if (path == null) {
+            call.reject("Path is required.");
+            return;
+        }
+
+        File file = new File(Environment.getExternalStorageDirectory(), path);
+
+        try {
+            JSObject result = new JSObject();
+
+            ExifInterface exif = new ExifInterface(file.getAbsoluteFile());
+
+            String iso = exif.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY);
+            result.put("iso", iso != null ? Integer.valueOf(iso) : null);
+
+            String shutterSpeed = exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME);
+            result.put("shutterSpeed", shutterSpeed != null ? Float.parseFloat(shutterSpeed) : null);
+
+            String aperture = exif.getAttribute(ExifInterface.TAG_F_NUMBER);
+            result.put("aperture", aperture != null ? Float.parseFloat(aperture) : null);
+
+            String focalLength = exif.getAttribute(ExifInterface.TAG_MAKER_NOTE);
+            result.put("focalLength", focalLength != null ? Float.parseFloat(focalLength) : null);
+
+            call.resolve(result);
+        } catch (IOException e) {
+            call.reject("Error reading EXIF data: " + e.getMessage());
+        }
     }
 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")

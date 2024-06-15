@@ -18,12 +18,6 @@ export interface Camera2Plugin {
     thumbnailHeight?: number
     thumbnailQuality?: number
   }): Promise<void>;
-  pictureToThumbnail(options: {
-    picture: string,
-    width: number,
-    height: number,
-    quality?: number,
-  }): Promise<{ thumbnail: string }>;
 
   setViewFinderSize(options: { width: number; height: number }): Promise<void>;
 
@@ -35,4 +29,17 @@ export interface Camera2Plugin {
 
   getIsoRange(): Promise<{ value: [min: number, max: number] | null }>;
   setIso(options: { value: number }): Promise<void>;
+
+  pictureToThumbnail(options: {
+    picture: string,
+    width: number,
+    height: number,
+    quality?: number,
+  }): Promise<{ thumbnail: string }>;
+  getExifData(options: { path: string }): Promise<{
+    iso: number | null,
+    shutterSpeed: number | null,
+    aperture: number | null,
+    focalLength: number | null,
+  }>;
 }

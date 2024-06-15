@@ -23,13 +23,15 @@ import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.RggbChannelVector;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import androidx.exifinterface.media.ExifInterface;
+
+import android.icu.text.SimpleDateFormat;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.util.Base64;
 import android.util.Log;
 import android.util.Range;
 import android.util.Size;
@@ -40,7 +42,6 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
@@ -54,7 +55,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -244,6 +247,7 @@ public class Camera2Fragment extends Fragment {
                             reader.acquireNextImage(),
                             mPicture,
                             (float) vfWidth / vfHeight,
+                            mCaptureResult,
                             mThumbnail,
                             mThumbnailWidth,
                             mThumbnailHeight,
@@ -286,12 +290,16 @@ public class Camera2Fragment extends Fragment {
      */
     private int mSensorOrientation;
 
+    private CaptureResult mCaptureResult;
+
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
      */
     private final CameraCaptureSession.CaptureCallback mCaptureCallback = new CameraCaptureSession.CaptureCallback() {
 
         private void process(CaptureResult result) {
+            mCaptureResult = result;
+
             switch (mState) {
                 case STATE_PREVIEW: {
                     // We have nothing to do when the camera preview is working normally.
@@ -353,23 +361,6 @@ public class Camera2Fragment extends Fragment {
         }
 
     };
-
-    /**
-     * Shows a {@link Toast} on the UI thread.
-     *
-     * @param text The message to show
-     */
-    private void showToast(final String text) {
-        final Activity activity = getActivity();
-        if (activity != null) {
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    Toast.makeText(activity, text, Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-    }
 
     /**
      * Given {@code choices} of {@code Size}s supported by a camera, choose the smallest one that
@@ -804,7 +795,7 @@ public class Camera2Fragment extends Fragment {
                         @Override
                         public void onConfigureFailed(
                                 @NonNull CameraCaptureSession cameraCaptureSession) {
-                            showToast("Failed");
+                            Log.d(TAG, "Failed");
                         }
                     }, null
             );
@@ -998,6 +989,7 @@ public class Camera2Fragment extends Fragment {
      * {@link #mCaptureCallback} from both {@link #lockFocus()}.
      */
     CaptureRequest.Builder captureBuilder;
+
     @SuppressWarnings({"CallToPrintStackTrace"})
     private void captureStillPicture() {
         try {
@@ -1062,8 +1054,7 @@ public class Camera2Fragment extends Fragment {
     private void unlockFocus() {
         try {
             // Reset the auto-focus trigger
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
+            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
             // setAutoFlash(mPreviewRequestBuilder);
             mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback, mBackgroundHandler);
             // After this, the camera will go back to the normal state of preview.
@@ -1106,10 +1097,8 @@ public class Camera2Fragment extends Fragment {
 
     private void setCaptureBuilderFocus(CaptureRequest.Builder captureBuilder) {
         if (seekFocus == -1) {
-            Log.e(TAG, "autofocus enable");
             captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
         } else {
-            Log.e(TAG, "autofocus disabled");
             captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
             captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, seekFocus);
         }
@@ -1129,15 +1118,26 @@ public class Camera2Fragment extends Fragment {
          */
         private final File mPicture;
         private final Float mRatio;
+        private final CaptureResult mCaptureResult;
         private final File mThumbnail;
         private final Integer mThumbnailWidth;
         private final Integer mThumbnailHeight;
         private final Integer mThumbnailQuality;
 
-        public ImageSaver(Image image, File picture, Float ratio, File thumbnail, Integer thumbnailWidth, Integer thumbnailHeight, Integer thumbnailQuality) {
+        public ImageSaver(
+                Image image,
+                File picture,
+                Float ratio,
+                CaptureResult captureResult,
+                File thumbnail,
+                Integer thumbnailWidth,
+                Integer thumbnailHeight,
+                Integer thumbnailQuality
+        ) {
             mImage = image;
             mPicture = picture;
             mRatio = ratio;
+            mCaptureResult = captureResult;
             mThumbnail = thumbnail;
             mThumbnailWidth = thumbnailWidth;
             mThumbnailHeight = thumbnailHeight;
@@ -1176,14 +1176,40 @@ public class Camera2Fragment extends Fragment {
             Bitmap croppedBitmap = Bitmap.createBitmap(bitmap, startX, startY, desiredWidth, desiredHeight);
 
             FileOutputStream output = null;
+            FileOutputStream thumbnailOutput = null;
             try {
                 output = new FileOutputStream(mPicture);
                 croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, output);
 
-                if (mThumbnail != null && mThumbnailWidth != null && mThumbnailWidth > 0 && mThumbnailHeight != null && mThumbnailHeight > 0) {
-                    Bitmap resizedBitmap = Bitmap.createScaledBitmap(croppedBitmap, mThumbnailWidth, mThumbnailHeight, true);
+                // EXIF
+                ExifInterface exif = new ExifInterface(mPicture.getAbsoluteFile());
 
-                    FileOutputStream thumbnailOutput = new FileOutputStream(mThumbnail);
+                Date currentDate = new Date();
+                String formattedDate = null;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    formattedDate = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.getDefault()).format(currentDate);
+                }
+                if (formattedDate != null) exif.setAttribute(ExifInterface.TAG_DATETIME, formattedDate);
+
+                Integer iso = mCaptureResult.get(CaptureResult.SENSOR_SENSITIVITY);
+                if (iso != null) exif.setAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY, iso.toString());
+
+                Long shutterSpeed = mCaptureResult.get(CaptureResult.SENSOR_EXPOSURE_TIME);
+                if (shutterSpeed != null) exif.setAttribute(ExifInterface.TAG_EXPOSURE_TIME, String.valueOf(shutterSpeed / 1_000_000_000F));
+
+                Float aperture = mCaptureResult.get(CaptureResult.LENS_APERTURE);
+                if (aperture != null) exif.setAttribute(ExifInterface.TAG_F_NUMBER, aperture.toString());
+
+                Float focalLength = mCaptureResult.get(CaptureResult.LENS_FOCAL_LENGTH);
+                // We use this tag instead because TAG_FOCAL_LENGTH doesn't work correctly, always returning null
+                if (focalLength != null) exif.setAttribute(ExifInterface.TAG_MAKER_NOTE, focalLength.toString());
+
+                exif.saveAttributes();
+
+                if (mThumbnail != null && mThumbnailWidth != null && mThumbnailWidth > 0 && mThumbnailHeight != null && mThumbnailHeight > 0) {
+                    thumbnailOutput = new FileOutputStream(mThumbnail);
+
+                    Bitmap resizedBitmap = Bitmap.createScaledBitmap(croppedBitmap, mThumbnailWidth, mThumbnailHeight, true);
                     resizedBitmap.compress(Bitmap.CompressFormat.JPEG, mThumbnailQuality == null ? 80 : mThumbnailQuality, thumbnailOutput);
                 }
             } catch (IOException e) {
@@ -1193,6 +1219,13 @@ public class Camera2Fragment extends Fragment {
                 if (null != output) {
                     try {
                         output.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+                if (null != thumbnailOutput) {
+                    try {
+                        thumbnailOutput.close();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
