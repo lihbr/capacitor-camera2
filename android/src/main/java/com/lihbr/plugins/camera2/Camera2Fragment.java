@@ -34,6 +34,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
 import android.util.Range;
+import android.util.Rational;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.LayoutInflater;
@@ -416,6 +417,7 @@ public class Camera2Fragment extends Fragment {
     private float seekFocus = -1;
     private long seekSs = 5_000_000L;
     private int seekIso = 1_600;
+    private int seekExposureCompensation = 0;
 
     public Camera2Fragment(Camera2EventListeners eventListeners) {
         this.eventListeners = eventListeners;
@@ -684,6 +686,19 @@ public class Camera2Fragment extends Fragment {
         createCameraPreviewSession_iso();
     }
 
+    public Range<Integer> getExposureCompensationRange() {
+        return characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+    }
+
+    public Rational getExposureCompensationStep() {
+        return characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
+    }
+
+    public void setExposureCompensation(int exposureCompensation) {
+        seekExposureCompensation = exposureCompensation;
+        createCameraPreviewSession_exposureCompensation();
+    }
+
     /**
      * Initiate a still image capture.
      */
@@ -769,9 +784,7 @@ public class Camera2Fragment extends Fragment {
                             try {
                                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
 
-                                setCaptureBuilderSs(mPreviewRequestBuilder);
-                                setCaptureBuilderIso(mPreviewRequestBuilder);
-                                setCaptureBuilderFocus(mPreviewRequestBuilder);
+                                setCaptureBuilder(mPreviewRequestBuilder);
 
                                 // TODO: White balance
                                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
@@ -816,6 +829,14 @@ public class Camera2Fragment extends Fragment {
     private void createCameraPreviewSession_iso() {
         try {
             setCaptureBuilderIso(mPreviewRequestBuilder);
+            mPreviewRequest = mPreviewRequestBuilder.build();
+            mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
+        }catch (CameraAccessException ignored) {}
+    }
+
+    private void createCameraPreviewSession_exposureCompensation() {
+        try {
+            setCaptureBuilderExposureCompensation(mPreviewRequestBuilder);
             mPreviewRequest = mPreviewRequestBuilder.build();
             mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
         }catch (CameraAccessException ignored) {}
@@ -1003,9 +1024,7 @@ public class Camera2Fragment extends Fragment {
 
             captureBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
 
-            setCaptureBuilderSs(captureBuilder);
-            setCaptureBuilderIso(captureBuilder);
-            setCaptureBuilderFocus(captureBuilder);
+            setCaptureBuilder(captureBuilder);
 
             // TODO: White balance
             captureBuilder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
@@ -1073,6 +1092,14 @@ public class Camera2Fragment extends Fragment {
         }
     }
 
+    private void setCaptureBuilder(CaptureRequest.Builder captureBuilder) {
+        setCaptureBuilderSs(captureBuilder);
+        setCaptureBuilderIso(captureBuilder);
+        setCaptureBuilderSs(captureBuilder);
+        setCaptureBuilderExposureCompensation(captureBuilder);
+        setCaptureBuilderFocus(captureBuilder);
+    }
+
     private void setCaptureBuilderSs(CaptureRequest.Builder captureBuilder) {
         //mPreviewRequestBuilder.set(CaptureRequest.COLOR_CORRECTION_GAINS, colorTemperature(seekWb));
 
@@ -1093,6 +1120,11 @@ public class Camera2Fragment extends Fragment {
             if (seekSs != -1) captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
             if (seekIso != -1) captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
         }
+    }
+    private void setCaptureBuilderExposureCompensation(CaptureRequest.Builder captureBuilder) {
+        Log.e(TAG, "aelock: " + captureBuilder.get(CaptureRequest.CONTROL_AE_MODE));
+        Log.e(TAG, "aemode: " + captureBuilder.get(CaptureRequest.CONTROL_AE_LOCK));
+        captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, seekExposureCompensation);
     }
 
     private void setCaptureBuilderFocus(CaptureRequest.Builder captureBuilder) {

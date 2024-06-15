@@ -319,6 +319,30 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
     }
 
     @PluginMethod
+    public void getExposureCompensationInfo(PluginCall call) {
+        if (!isRunningOrReject(call)) return;
+
+        JSObject jsObject = new JSObject();
+        jsObject.put("range", serializeRangeToJSArray(camera2.getExposureCompensationRange()));
+        jsObject.put("step", camera2.getExposureCompensationStep().floatValue());
+
+        call.resolve(jsObject);
+    }
+
+    @PluginMethod
+    public void setExposureCompensation(PluginCall call) {
+        if (!isRunningOrReject(call)) return;
+
+        Integer exposureCompensation = call.getInt("value", 0);
+
+        if (exposureCompensation != null) {
+            camera2.setExposureCompensation(exposureCompensation);
+        }
+
+        call.resolve();
+    }
+
+    @PluginMethod
     public void pictureToThumbnail(PluginCall call) {
         String picture = call.getString("picture");
         Integer width = call.getInt("width", 0);

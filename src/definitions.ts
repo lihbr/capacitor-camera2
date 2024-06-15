@@ -30,6 +30,9 @@ export interface Camera2Plugin {
   getIsoRange(): Promise<{ value: [min: number, max: number] | null }>;
   setIso(options: { value: number }): Promise<void>;
 
+  getExposureCompensationInfo(): Promise<{ range: [min: number, max: number] | null, step: number }>;
+  setExposureCompensation(options: { value: number }): Promise<void>;
+
   pictureToThumbnail(options: {
     picture: string,
     width: number,

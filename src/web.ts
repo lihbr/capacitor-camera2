@@ -27,6 +27,9 @@ export class Camera2Web extends WebPlugin implements Camera2Plugin {
   getIsoRange = noop('getIsoRange');
   setIso = noop('setIso');
 
+  getExposureCompensationInfo = noop('getExposureCompensationInfo');
+  setExposureCompensation = noop('setExposureCompensation');
+
   pictureToThumbnail = noop('pictureToThumbnail');
   getExifData = noop('getExifData');
 }
