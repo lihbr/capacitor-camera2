@@ -782,20 +782,8 @@ public class Camera2Fragment extends Fragment {
                             // When the session is ready, we start displaying the preview.
                             mCaptureSession = cameraCaptureSession;
                             try {
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
-
                                 setCaptureBuilder(mPreviewRequestBuilder);
 
-                                // TODO: White balance
-                                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
-                                /*mPreviewRequestBuilder.set(CaptureRequest.COLOR_CORRECTION_MODE, CaptureRequest.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX);
-                                mPreviewRequestBuilder.set(CaptureRequest.COLOR_CORRECTION_GAINS, colorTemperature(seekWb));*/
-
-
-                                // Flash is automatically enabled when necessary.
-                                //setAutoFlash(mPreviewRequestBuilder);
-
-                                // Finally, we start displaying the camera preview.
                                 mPreviewRequest = mPreviewRequestBuilder.build();
                                 mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
                             } catch (CameraAccessException e) {
@@ -850,57 +838,45 @@ public class Camera2Fragment extends Fragment {
         } catch (CameraAccessException ignored) {}
     }
 
-    public static RggbChannelVector colorTemperature(int whiteBalance) {
-        float temperature = (float) whiteBalance / 100;
-        float red;
-        float green;
-        float blue;
+    private void setCaptureBuilder(CaptureRequest.Builder captureBuilder) {
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
 
-        //Calculate red
-        if (temperature <= 66)
-            red = 255;
-        else {
-            red = temperature - 60;
-            red = (float) (329.698727446 * (Math.pow((double) red, -0.1332047592)));
-            if (red < 0)
-                red = 0;
-            if (red > 255)
-                red = 255;
-        }
+        setCaptureBuilderSs(captureBuilder);
+        setCaptureBuilderIso(captureBuilder);
+        setCaptureBuilderSs(captureBuilder);
+        setCaptureBuilderExposureCompensation(captureBuilder);
+        setCaptureBuilderFocus(captureBuilder);
 
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
+    }
 
-        //Calculate green
-        if (temperature <= 66) {
-            green = temperature;
-            green = (float) (99.4708025861 * Math.log(green) - 161.1195681661);
-            if (green < 0)
-                green = 0;
-            if (green > 255)
-                green = 255;
+    private void setCaptureBuilderSs(CaptureRequest.Builder captureBuilder) {
+        setCaptureBuilderIso(captureBuilder);
+    }
+
+    private void setCaptureBuilderIso(CaptureRequest.Builder captureBuilder) {
+        if (seekSs < 0 || seekIso < 0) {
+            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+            captureBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_PREVIEW);
         } else {
-            green = temperature - 60;
-            green = (float) (288.1221695283 * (Math.pow((double) green, -0.0755148492)));
-            if (green < 0)
-                green = 0;
-            if (green > 255)
-                green = 255;
-        }
+            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+            captureBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT, CaptureRequest.CONTROL_CAPTURE_INTENT_MANUAL);
 
-        //calculate blue
-        if (temperature >= 66)
-            blue = 255;
-        else if (temperature <= 19)
-            blue = 0;
-        else {
-            blue = temperature - 10;
-            blue = (float) (138.5177312231 * Math.log(blue) - 305.0447927307);
-            if (blue < 0)
-                blue = 0;
-            if (blue > 255)
-                blue = 255;
+            captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
+            captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
         }
+    }
+    private void setCaptureBuilderExposureCompensation(CaptureRequest.Builder captureBuilder) {
+        captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, seekExposureCompensation);
+    }
 
-        return new RggbChannelVector((red / 255) * 2, (green / 255), (green / 255), (blue / 255) * 2);
+    private void setCaptureBuilderFocus(CaptureRequest.Builder captureBuilder) {
+        if (seekFocus < 0) {
+            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+        } else {
+            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
+            captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, seekFocus);
+        }
     }
 
     /**
@@ -1022,12 +998,7 @@ public class Camera2Fragment extends Fragment {
             captureBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
             captureBuilder.addTarget(mImageReader.getSurface());
 
-            captureBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
-
             setCaptureBuilder(captureBuilder);
-
-            // TODO: White balance
-            captureBuilder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
 
             // Orientation
             int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
@@ -1092,48 +1063,57 @@ public class Camera2Fragment extends Fragment {
         }
     }
 
-    private void setCaptureBuilder(CaptureRequest.Builder captureBuilder) {
-        setCaptureBuilderSs(captureBuilder);
-        setCaptureBuilderIso(captureBuilder);
-        setCaptureBuilderSs(captureBuilder);
-        setCaptureBuilderExposureCompensation(captureBuilder);
-        setCaptureBuilderFocus(captureBuilder);
-    }
+    public static RggbChannelVector colorTemperature(int whiteBalance) {
+        float temperature = (float) whiteBalance / 100;
+        float red;
+        float green;
+        float blue;
 
-    private void setCaptureBuilderSs(CaptureRequest.Builder captureBuilder) {
-        //mPreviewRequestBuilder.set(CaptureRequest.COLOR_CORRECTION_GAINS, colorTemperature(seekWb));
-
-        if (seekSs == -1 && seekIso == -1) {
-            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-        } else {
-            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-            if (seekSs != -1) captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
-            if (seekIso != -1) captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
+        //Calculate red
+        if (temperature <= 66)
+            red = 255;
+        else {
+            red = temperature - 60;
+            red = (float) (329.698727446 * (Math.pow((double) red, -0.1332047592)));
+            if (red < 0)
+                red = 0;
+            if (red > 255)
+                red = 255;
         }
-    }
 
-    private void setCaptureBuilderIso(CaptureRequest.Builder captureBuilder) {
-        if (seekSs == -1 && seekIso == -1) {
-            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-        } else {
-            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
-            if (seekSs != -1) captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, seekSs);
-            if (seekIso != -1) captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
-        }
-    }
-    private void setCaptureBuilderExposureCompensation(CaptureRequest.Builder captureBuilder) {
-        Log.e(TAG, "aelock: " + captureBuilder.get(CaptureRequest.CONTROL_AE_MODE));
-        Log.e(TAG, "aemode: " + captureBuilder.get(CaptureRequest.CONTROL_AE_LOCK));
-        captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, seekExposureCompensation);
-    }
 
-    private void setCaptureBuilderFocus(CaptureRequest.Builder captureBuilder) {
-        if (seekFocus == -1) {
-            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+        //Calculate green
+        if (temperature <= 66) {
+            green = temperature;
+            green = (float) (99.4708025861 * Math.log(green) - 161.1195681661);
+            if (green < 0)
+                green = 0;
+            if (green > 255)
+                green = 255;
         } else {
-            captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-            captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, seekFocus);
+            green = temperature - 60;
+            green = (float) (288.1221695283 * (Math.pow((double) green, -0.0755148492)));
+            if (green < 0)
+                green = 0;
+            if (green > 255)
+                green = 255;
         }
+
+        //calculate blue
+        if (temperature >= 66)
+            blue = 255;
+        else if (temperature <= 19)
+            blue = 0;
+        else {
+            blue = temperature - 10;
+            blue = (float) (138.5177312231 * Math.log(blue) - 305.0447927307);
+            if (blue < 0)
+                blue = 0;
+            if (blue > 255)
+                blue = 255;
+        }
+
+        return new RggbChannelVector((red / 255) * 2, (green / 255), (green / 255), (blue / 255) * 2);
     }
 
     /**

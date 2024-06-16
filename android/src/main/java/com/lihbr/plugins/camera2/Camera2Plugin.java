@@ -269,7 +269,7 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
         Float shutterSpeedS = call.getFloat("value", -1F);
 
         if (shutterSpeedS != null) {
-            camera2.setShutterSpeed((long) (shutterSpeedS * 1_000_000_000L));
+            camera2.setShutterSpeed((long) (shutterSpeedS < 0 ? shutterSpeedS : shutterSpeedS * 1_000_000_000L));
         }
 
         call.resolve();
