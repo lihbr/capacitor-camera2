@@ -22,7 +22,6 @@ npx cap sync
 * [`start(...)`](#start)
 * [`stop()`](#stop)
 * [`capture(...)`](#capture)
-* [`pictureToThumbnail(...)`](#picturetothumbnail)
 * [`setViewFinderSize(...)`](#setviewfindersize)
 * [`getShutterSpeedRange()`](#getshutterspeedrange)
 * [`setShutterSpeed(...)`](#setshutterspeed)
@@ -30,6 +29,10 @@ npx cap sync
 * [`setAperture(...)`](#setaperture)
 * [`getIsoRange()`](#getisorange)
 * [`setIso(...)`](#setiso)
+* [`getExposureCompensationInfo()`](#getexposurecompensationinfo)
+* [`setExposureCompensation(...)`](#setexposurecompensation)
+* [`pictureToThumbnail(...)`](#picturetothumbnail)
+* [`getExifData(...)`](#getexifdata)
 * [Type Aliases](#type-aliases)
 
 </docgen-index>
@@ -72,21 +75,6 @@ capture(options: { picturePath: string; thumbnailPath?: string; thumbnailWidth?:
 | Param         | Type                                                                                                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`options`** | <code>{ picturePath: string; thumbnailPath?: string; thumbnailWidth?: number; thumbnailHeight?: number; thumbnailQuality?: number; }</code> |
-
-**Returns:** <code>any</code>
-
---------------------
-
-
-### pictureToThumbnail(...)
-
-```typescript
-pictureToThumbnail(options: { picture: string; width: number; height: number; quality?: number; }) => any
-```
-
-| Param         | Type                                                                               |
-| ------------- | ---------------------------------------------------------------------------------- |
-| **`options`** | <code>{ picture: string; width: number; height: number; quality?: number; }</code> |
 
 **Returns:** <code>any</code>
 
@@ -180,6 +168,62 @@ setIso(options: { value: number; }) => any
 | Param         | Type                            |
 | ------------- | ------------------------------- |
 | **`options`** | <code>{ value: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### getExposureCompensationInfo()
+
+```typescript
+getExposureCompensationInfo() => any
+```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### setExposureCompensation(...)
+
+```typescript
+setExposureCompensation(options: { value: number; }) => any
+```
+
+| Param         | Type                            |
+| ------------- | ------------------------------- |
+| **`options`** | <code>{ value: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### pictureToThumbnail(...)
+
+```typescript
+pictureToThumbnail(options: { picture: string; width: number; height: number; quality?: number; }) => any
+```
+
+| Param         | Type                                                                               |
+| ------------- | ---------------------------------------------------------------------------------- |
+| **`options`** | <code>{ picture: string; width: number; height: number; quality?: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### getExifData(...)
+
+```typescript
+getExifData(options: { path: string; }) => any
+```
+
+| Param         | Type                           |
+| ------------- | ------------------------------ |
+| **`options`** | <code>{ path: string; }</code> |
 
 **Returns:** <code>any</code>
 
