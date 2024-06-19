@@ -8,7 +8,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Point;
-import android.hardware.camera2.CaptureResult;
 import android.os.Environment;
 import android.util.Base64;
 import android.util.DisplayMetrics;
@@ -289,8 +288,11 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
     public void setAperture(PluginCall call) {
         if (!isRunningOrReject(call)) return;
 
-        // Float aperture = call.getFloat("value", -1F);
-        // TODO: Implement
+        Float aperture = call.getFloat("value", -1F);
+
+        if (aperture != null) {
+            camera2.setAperture(aperture);
+        }
 
         call.resolve();
     }

@@ -21,7 +21,6 @@ import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
-import android.hardware.camera2.params.RggbChannelVector;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import androidx.exifinterface.media.ExifInterface;
 
@@ -47,7 +46,6 @@ import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -416,6 +414,7 @@ public class Camera2Fragment extends Fragment {
     private int vfHeight;
     private float seekFocus = -1;
     private long seekSs = 5_000_000L;
+    private float seekAperture = -1;
     private int seekIso = 1_600;
     private int seekExposureCompensation = 0;
 
@@ -662,7 +661,7 @@ public class Camera2Fragment extends Fragment {
 
     public void setFocus(float focus) {
         seekFocus = focus;
-        createCameraPreviewSession_focus();
+        setCaptureBuilderFocus(mPreviewRequestBuilder);
     }
 
     public Range<Long> getShutterSpeedRange() {
@@ -670,11 +669,18 @@ public class Camera2Fragment extends Fragment {
     }
     public void setShutterSpeed(long shutterSpeed) {
         seekSs = shutterSpeed;
-        createCameraPreviewSession_Ss();
+        setCaptureBuilderSs(mPreviewRequestBuilder);
+        setRepeatingRequest();
     }
 
     public float[] getApertureRange() {
         return characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES);
+    }
+
+    public void setAperture(float aperture) {
+        seekAperture = aperture;
+        setCaptureBuilderAperture(mPreviewRequestBuilder);
+        setRepeatingRequest();
     }
 
     public Range<Integer> getIsoRange() {
@@ -683,7 +689,8 @@ public class Camera2Fragment extends Fragment {
 
     public void setIso(int iso) {
         seekIso = iso;
-        createCameraPreviewSession_iso();
+        setCaptureBuilderIso(mPreviewRequestBuilder);
+        setRepeatingRequest();
     }
 
     public Range<Integer> getExposureCompensationRange() {
@@ -696,7 +703,8 @@ public class Camera2Fragment extends Fragment {
 
     public void setExposureCompensation(int exposureCompensation) {
         seekExposureCompensation = exposureCompensation;
-        createCameraPreviewSession_exposureCompensation();
+        setCaptureBuilderExposureCompensation(mPreviewRequestBuilder);
+        setRepeatingRequest();
     }
 
     /**
@@ -772,23 +780,15 @@ public class Camera2Fragment extends Fragment {
                     new CameraCaptureSession.StateCallback() {
 
                         @Override
-                        @SuppressWarnings({"CallToPrintStackTrace"})
                         public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
                             // The camera is already closed
                             if (null == mCameraDevice) {
                                 return;
                             }
 
-                            // When the session is ready, we start displaying the preview.
                             mCaptureSession = cameraCaptureSession;
-                            try {
-                                setCaptureBuilder(mPreviewRequestBuilder);
-
-                                mPreviewRequest = mPreviewRequestBuilder.build();
-                                mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-                            } catch (CameraAccessException e) {
-                                e.printStackTrace();
-                            }
+                            setCaptureBuilder(mPreviewRequestBuilder);
+                            setRepeatingRequest();
 
                             eventListeners.onStart();
                         }
@@ -805,34 +805,8 @@ public class Camera2Fragment extends Fragment {
         }
     }
 
-    private void createCameraPreviewSession_Ss() {
+    private void setRepeatingRequest() {
         try {
-            setCaptureBuilderSs(mPreviewRequestBuilder);
-            mPreviewRequest = mPreviewRequestBuilder.build();
-            mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-
-        } catch (CameraAccessException ignored) {}
-    }
-
-    private void createCameraPreviewSession_iso() {
-        try {
-            setCaptureBuilderIso(mPreviewRequestBuilder);
-            mPreviewRequest = mPreviewRequestBuilder.build();
-            mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-        }catch (CameraAccessException ignored) {}
-    }
-
-    private void createCameraPreviewSession_exposureCompensation() {
-        try {
-            setCaptureBuilderExposureCompensation(mPreviewRequestBuilder);
-            mPreviewRequest = mPreviewRequestBuilder.build();
-            mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
-        }catch (CameraAccessException ignored) {}
-    }
-
-    private void createCameraPreviewSession_focus() {
-        try {
-            setCaptureBuilderFocus(mPreviewRequestBuilder);
             mPreviewRequest = mPreviewRequestBuilder.build();
             mCaptureSession.setRepeatingRequest(mPreviewRequest, mCaptureCallback, mBackgroundHandler);
         } catch (CameraAccessException ignored) {}
@@ -842,6 +816,7 @@ public class Camera2Fragment extends Fragment {
         mPreviewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
 
         setCaptureBuilderSs(captureBuilder);
+        setCaptureBuilderAperture(captureBuilder);
         setCaptureBuilderIso(captureBuilder);
         setCaptureBuilderSs(captureBuilder);
         setCaptureBuilderExposureCompensation(captureBuilder);
@@ -866,6 +841,13 @@ public class Camera2Fragment extends Fragment {
             captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, seekIso);
         }
     }
+
+    private void setCaptureBuilderAperture(CaptureRequest.Builder captureBuilder) {
+        if (seekAperture > 0) {
+            captureBuilder.set(CaptureRequest.LENS_APERTURE, seekAperture);
+        }
+    }
+
     private void setCaptureBuilderExposureCompensation(CaptureRequest.Builder captureBuilder) {
         captureBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, seekExposureCompensation);
     }
@@ -1054,66 +1036,6 @@ public class Camera2Fragment extends Fragment {
             e.printStackTrace();
         }
         eventListeners.onCapture();
-    }
-
-    private void setAutoFlash(CaptureRequest.Builder requestBuilder) {
-        if (mFlashSupported) {
-            requestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                    CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
-        }
-    }
-
-    public static RggbChannelVector colorTemperature(int whiteBalance) {
-        float temperature = (float) whiteBalance / 100;
-        float red;
-        float green;
-        float blue;
-
-        //Calculate red
-        if (temperature <= 66)
-            red = 255;
-        else {
-            red = temperature - 60;
-            red = (float) (329.698727446 * (Math.pow((double) red, -0.1332047592)));
-            if (red < 0)
-                red = 0;
-            if (red > 255)
-                red = 255;
-        }
-
-
-        //Calculate green
-        if (temperature <= 66) {
-            green = temperature;
-            green = (float) (99.4708025861 * Math.log(green) - 161.1195681661);
-            if (green < 0)
-                green = 0;
-            if (green > 255)
-                green = 255;
-        } else {
-            green = temperature - 60;
-            green = (float) (288.1221695283 * (Math.pow((double) green, -0.0755148492)));
-            if (green < 0)
-                green = 0;
-            if (green > 255)
-                green = 255;
-        }
-
-        //calculate blue
-        if (temperature >= 66)
-            blue = 255;
-        else if (temperature <= 19)
-            blue = 0;
-        else {
-            blue = temperature - 10;
-            blue = (float) (138.5177312231 * Math.log(blue) - 305.0447927307);
-            if (blue < 0)
-                blue = 0;
-            if (blue > 255)
-                blue = 255;
-        }
-
-        return new RggbChannelVector((red / 255) * 2, (green / 255), (green / 255), (blue / 255) * 2);
     }
 
     /**
