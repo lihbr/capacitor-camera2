@@ -12,11 +12,11 @@ export interface Camera2Plugin {
   start(options: Camera2Options): Promise<void>;
   stop(): Promise<void>;
   capture(options: {
-    picturePath: string
-    thumbnailPath?: string
-    thumbnailWidth?: number
-    thumbnailHeight?: number
-    thumbnailQuality?: number
+    picturePath: string;
+    thumbnailPath?: string;
+    thumbnailWidth?: number;
+    thumbnailHeight?: number;
+    thumbnailQuality?: number;
   }): Promise<void>;
 
   setViewFinderSize(options: { width: number; height: number }): Promise<void>;
@@ -30,19 +30,22 @@ export interface Camera2Plugin {
   getIsoRange(): Promise<{ value: [min: number, max: number] | null }>;
   setIso(options: { value: number }): Promise<void>;
 
-  getExposureCompensationInfo(): Promise<{ range: [min: number, max: number] | null, step: number }>;
+  getExposureCompensationInfo(): Promise<{
+    range: [min: number, max: number] | null;
+    step: number;
+  }>;
   setExposureCompensation(options: { value: number }): Promise<void>;
 
   pictureToThumbnail(options: {
-    picture: string,
-    width: number,
-    height: number,
-    quality?: number,
+    picture: string;
+    width: number;
+    height: number;
+    quality?: number;
   }): Promise<{ thumbnail: string }>;
   getExifData(options: { path: string }): Promise<{
-    iso: number | null,
-    shutterSpeed: number | null,
-    aperture: number | null,
-    focalLength: number | null,
+    iso: number | null;
+    shutterSpeed: number | null;
+    aperture: number | null;
+    focalLength: number | null;
   }>;
 }
