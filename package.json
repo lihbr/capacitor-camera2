@@ -1,6 +1,6 @@
 {
   "name": "@lihbr/capacitor-camera2",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "packageManager": "pnpm@9.1.4",
   "description": "Capacitor plugin for android.hardware.camera2",
   "author": "Lucie Haberer <hello@lihbr.com> (https://lihbr.com)",
@@ -32,7 +32,7 @@
     "dev": "tsc --watch",
     "build": "pnpm run clean && pnpm run docgen && tsc && rollup -c rollup.config.js",
     "release": "pnpm run test && bumpp",
-		"release:dry": "npx changelogithub --dry",
+    "release:dry": "npx changelogithub --dry",
     "test": "pnpm lint && pnpm build",
     "verify": "pnpm run verify:ios && pnpm run verify:android && pnpm run verify:web",
     "verify:ios": "xcodebuild -scheme LihbrCapacitorCamera2 -destination generic/platform=iOS",
