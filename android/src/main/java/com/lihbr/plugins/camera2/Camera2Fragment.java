@@ -729,7 +729,9 @@ public class Camera2Fragment extends Fragment {
     }
 
     public void dispatchTouchEvent(MotionEvent event) {
-        mTextureView.dispatchTouchEvent(event);
+        if (mTextureView != null && mTextureView.isAvailable()) {
+            mTextureView.dispatchTouchEvent(event);
+        }
     }
 
     /**
