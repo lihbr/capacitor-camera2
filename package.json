@@ -1,6 +1,6 @@
 {
   "name": "@lihbr/capacitor-camera2",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "packageManager": "pnpm@9.1.4",
   "description": "Capacitor plugin for android.hardware.camera2",
   "author": "Lucie Haberer <hello@lihbr.com> (https://lihbr.com)",
