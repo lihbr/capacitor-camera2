@@ -30,6 +30,12 @@ export class Camera2Web extends WebPlugin implements Camera2Plugin {
   getExposureCompensationInfo = noop('getExposureCompensationInfo');
   setExposureCompensation = noop('setExposureCompensation');
 
+  openPIP = noop('openPIP');
+  closePIP = noop('closePIP');
+  
+  setPIPSize = noop('setPIPSize');
+  setPIPPosition = noop('setPIPPosition');
+
   pictureToThumbnail = noop('pictureToThumbnail');
   getExifData = noop('getExifData');
 }

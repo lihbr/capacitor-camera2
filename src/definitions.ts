@@ -36,6 +36,12 @@ export interface Camera2Plugin {
   }>;
   setExposureCompensation(options: { value: number }): Promise<void>;
 
+  openPIP(options: { width: number; height: number; x: number; y: number; }): Promise<void>;
+  closePIP(): Promise<void>;
+
+  setPIPSize(options: { width: number; height: number }): Promise<void>;
+  setPIPPosition(options: { x: number; y: number }): Promise<void>;
+
   pictureToThumbnail(options: {
     picture: string;
     width: number;

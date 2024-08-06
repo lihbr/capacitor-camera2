@@ -57,6 +57,7 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
     private boolean toBack;
     private String startCallbackId;
     private String captureCallbackId;
+    private String setPIPPositionCallbackId;
 
     @PluginMethod
     public void start(PluginCall call) {
@@ -100,7 +101,7 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
 
                 // offset
                 // int computedX = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, x, metrics);
-                /// int computedY = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, y, metrics);
+                // int computedY = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, y, metrics);
 
                 // size
                 int computedWidth;
@@ -342,6 +343,76 @@ public class Camera2Plugin extends Plugin implements Camera2Fragment.Camera2Even
         }
 
         call.resolve();
+    }
+
+    @PluginMethod
+    public void openPIP(PluginCall call) {
+        if (!isRunningOrReject(call)) return;
+
+        Float width = call.getFloat("width", 0F);
+        Float height = call.getFloat("height", 0F);
+        Float x = call.getFloat("x", 0F);
+        Float y = call.getFloat("y", 0F);
+
+        if (width != null && width > 0 && height != null && height > 0 && x != null && y != null) {
+            camera2.openPIP(
+                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, width, metrics),
+                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, height, metrics),
+                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, x, metrics),
+                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, y, metrics)
+            );
+        }
+
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void closePIP(PluginCall call) {
+        if (!isRunningOrReject(call)) return;
+
+        camera2.closePIP();
+
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setPIPSize(PluginCall call) {
+        if (!isRunningOrReject(call)) return;
+
+        Float width = call.getFloat("width", 0F);
+        Float height = call.getFloat("height", 0F);
+
+        if (width != null && width > 0 && height != null && height > 0) {
+            camera2.setPIPSize(
+                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, width, metrics),
+                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, height, metrics)
+            );
+        }
+
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setPIPPosition(PluginCall call) {
+        if (!isRunningOrReject(call)) return;
+
+        Float x = call.getFloat("x", 0F);
+        Float y = call.getFloat("y", 0F);
+
+        if (x != null && y != null) {
+            camera2.setPIPPosition(
+                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, x, metrics),
+                    (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, y, metrics)
+            );
+        }
+
+        bridge.saveCall(call);
+        setPIPPositionCallbackId = call.getCallbackId();
+    }
+
+    public void onPIPSetPosition() {
+        resolveCallbackId(setPIPPositionCallbackId);
+        setPIPPositionCallbackId = null;
     }
 
     @PluginMethod

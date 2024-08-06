@@ -31,6 +31,10 @@ npx cap sync
 * [`setIso(...)`](#setiso)
 * [`getExposureCompensationInfo()`](#getexposurecompensationinfo)
 * [`setExposureCompensation(...)`](#setexposurecompensation)
+* [`openPIP(...)`](#openpip)
+* [`closePIP()`](#closepip)
+* [`setPIPSize(...)`](#setpipsize)
+* [`setPIPPosition(...)`](#setpipposition)
 * [`pictureToThumbnail(...)`](#picturetothumbnail)
 * [`getExifData(...)`](#getexifdata)
 * [Type Aliases](#type-aliases)
@@ -200,6 +204,62 @@ setExposureCompensation(options: { value: number; }) => any
 --------------------
 
 
+### openPIP(...)
+
+```typescript
+openPIP(options: { width: number; height: number; x: number; y: number; }) => any
+```
+
+| Param         | Type                                                                  |
+| ------------- | --------------------------------------------------------------------- |
+| **`options`** | <code>{ width: number; height: number; x: number; y: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### closePIP()
+
+```typescript
+closePIP() => any
+```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### setPIPSize(...)
+
+```typescript
+setPIPSize(options: { width: number; height: number; }) => any
+```
+
+| Param         | Type                                            |
+| ------------- | ----------------------------------------------- |
+| **`options`** | <code>{ width: number; height: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### setPIPPosition(...)
+
+```typescript
+setPIPPosition(options: { x: number; y: number; }) => any
+```
+
+| Param         | Type                                   |
+| ------------- | -------------------------------------- |
+| **`options`** | <code>{ x: number; y: number; }</code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
 ### pictureToThumbnail(...)
 
 ```typescript
@@ -235,7 +295,7 @@ getExifData(options: { path: string; }) => any
 
 #### Camera2Options
 
-<code>{ x?: number; y?: number; width?: number; height?: number; paddingBottom?: number; toBack?: boolean; lockAndroidOrientation?: boolean; }</code>
+<code>{ x?: number; y?: number; width?: number; height?: number; paddingBottom?: number; toBack?: boolean; lockAndroidOrientation?: boolean; }</code>
 
 </docgen-api>
 

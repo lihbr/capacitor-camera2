@@ -22,6 +22,8 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
+
+import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.exifinterface.media.ExifInterface;
 
 import android.icu.text.SimpleDateFormat;
@@ -42,6 +44,7 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
@@ -64,6 +67,7 @@ public class Camera2Fragment extends Fragment {
     public interface Camera2EventListeners {
         void onStart();
         void onCapture();
+        void onPIPSetPosition();
     }
 
     private final Camera2EventListeners eventListeners;
@@ -122,9 +126,9 @@ public class Camera2Fragment extends Fragment {
     private static final int MAX_PREVIEW_HEIGHT = 1080;
 
     /**
-     * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a
-     * {@link TextureView}.
+     * An {@link AutoFitTextureView} for camera preview.
      */
+    private AutoFitTextureView mTextureView;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
 
         @Override
@@ -137,7 +141,7 @@ public class Camera2Fragment extends Fragment {
 
         @Override
         public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture texture, int width, int height) {
-            configureTransform(width, height);
+            configureViewFinderTransform(width, height);
         }
 
         @Override
@@ -151,15 +155,44 @@ public class Camera2Fragment extends Fragment {
 
     };
 
+    private ConstraintLayout mPIPContainer;
+    private AutoFitTextureView mPIPTextureView;
+    private int pipWidth;
+    private int pipHeight;
+    private int pipX = 0;
+    private int pipY = 0;
+    private final TextureView.SurfaceTextureListener mPIPSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(@NonNull SurfaceTexture texture, int width, int height) {
+            if (pipWidth != 0 && pipHeight != 0) {
+                setPIPSize(pipWidth, pipHeight);
+            }
+            setPIPPosition(pipX, pipY);
+
+            if (mCameraDevice != null) {
+                createCameraPreviewSession();
+            }
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture texture, int width, int height) {
+            configurePIPTransform(width, height);
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture texture) {
+            return true;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(@NonNull SurfaceTexture texture) {
+        }
+    };
+
     /**
      * ID of the current {@link CameraDevice}.
      */
     private String mCameraId;
-
-    /**
-     * An {@link AutoFitTextureView} for camera preview.
-     */
-    private AutoFitTextureView mTextureView;
 
     /**
      * A {@link CameraCaptureSession } for camera preview.
@@ -431,6 +464,21 @@ public class Camera2Fragment extends Fragment {
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         mTextureView = view.findViewById(R.id.texture);
+        mPIPContainer = view.findViewById(R.id.container);
+        disableClipOnParents(view);
+    }
+    private void disableClipOnParents(View view) {
+        if (view == null || view.getParent() == null) {
+            return;
+        }
+
+        if (view instanceof ViewGroup) {
+            ((ViewGroup) view).setClipChildren(false);
+        }
+
+        if (view.getParent() instanceof View) {
+            disableClipOnParents((View) view.getParent());
+        }
     }
 
     @Override
@@ -582,7 +630,7 @@ public class Camera2Fragment extends Fragment {
         if (requestCameraPermission()) return;
 
         setUpCameraOutputs(width, height);
-        configureTransform(width, height);
+        configureViewFinderTransform(width, height);
 
         /*
          * Delay the opening of the camera until (hopefully) layout has been fully settled.
@@ -644,15 +692,65 @@ public class Camera2Fragment extends Fragment {
     public void setViewFinderSize(int width, int height) {
         vfWidth = width;
         vfHeight = height;
-        if (mTextureView != null && mTextureView.isAvailable()) {
+        setTextureViewSize(mTextureView, width, height);
+    }
+
+    public void setPIPSize(int width, int height) {
+        pipWidth = width;
+        pipHeight = height;
+        setTextureViewSize(mPIPTextureView, width, height);
+    }
+
+    private void setTextureViewSize(AutoFitTextureView textureView, int width, int height) {
+        if (textureView != null && textureView.isAvailable()) {
             Activity activity = getActivity();
 
             if (activity != null) {
                 activity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        mTextureView.setLayoutParams(new ViewGroup.LayoutParams(width, height));
-                        mTextureView.setAspectRatio(width, height);
+                        textureView.setLayoutParams(new ViewGroup.LayoutParams(width, height));
+                        textureView.setAspectRatio(width, height);
+                    }
+                });
+            }
+        }
+    }
+
+    public void setPIPPosition(int x, int y) {
+        pipX = x;
+        pipY = y;
+
+        // setTextureViewPosition(mPIPTextureView, x, y);
+
+        // We take a dirty shortcut here to avoid messing with the transform matrix of the texture view for now
+        if (mPIPContainer != null) {
+            Activity activity = getActivity();
+
+            if (activity != null) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mPIPContainer.setTranslationX(x);
+                        mPIPContainer.setTranslationY(y);
+
+                        eventListeners.onPIPSetPosition();
+                    }
+                });
+            }
+        }
+    }
+
+    private void setTextureViewPosition(AutoFitTextureView textureView, int x, int y) {
+        if (textureView != null && textureView.isAvailable()) {
+            Activity activity = getActivity();
+
+            if (activity != null) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        textureView.setTranslationX(x);
+                        textureView.setTranslationY(y);
                     }
                 });
             }
@@ -728,6 +826,55 @@ public class Camera2Fragment extends Fragment {
         lockFocus();
     }
 
+    public void openPIP(int width, int height, int x, int y) {
+        Activity activity = getActivity();
+
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    // Using this dirty trick for now to value smoothness over performances
+                    if (mPIPTextureView != null) {
+                        mPIPContainer.setAlpha(1);
+                        return;
+                    }
+
+                    mPIPTextureView = new AutoFitTextureView(requireContext());
+                    mPIPContainer.setAlpha(0);
+                    mPIPContainer.addView(mPIPTextureView, new ConstraintLayout.LayoutParams(
+                            ConstraintLayout.LayoutParams.MATCH_PARENT,
+                            ConstraintLayout.LayoutParams.MATCH_PARENT
+                    ));
+                    mPIPContainer.bringToFront();
+                    setPIPPosition(x, y);
+                    setPIPSize(width, height);
+                    mPIPTextureView.setSurfaceTextureListener(mPIPSurfaceTextureListener);
+                    mPIPContainer.setAlpha(1);
+                }
+            });
+        }
+    }
+
+    public void closePIP() {
+        Activity activity = getActivity();
+
+        if (activity != null) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    // Using this dirty trick for now to value smoothness over performances
+                    mPIPContainer.setAlpha(0);
+
+                    // mPIPContainer.removeView(mPIPTextureView);
+                    // mPIPTextureView.destroyDrawingCache();
+                    // mPIPTextureView = null;
+
+                    // createCameraPreviewSession();
+                }
+            });
+        }
+    }
+
     public void dispatchTouchEvent(MotionEvent event) {
         if (mTextureView != null && mTextureView.isAvailable()) {
             mTextureView.dispatchTouchEvent(event);
@@ -764,27 +911,49 @@ public class Camera2Fragment extends Fragment {
     @SuppressWarnings({"CallToPrintStackTrace"})
     private void createCameraPreviewSession() {
         try {
-            SurfaceTexture texture = mTextureView.getSurfaceTexture();
-            assert texture != null;
+            if (mCaptureSession != null) {
+                mCaptureSession.stopRepeating();
+                mCaptureSession.abortCaptures();
+                mCaptureSession.close();
+                mCaptureSession = null;
+            }
 
-            // We configure the size of default buffer to be the size of camera preview we want.
-            texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            SurfaceTexture vfTexture = mTextureView.getSurfaceTexture();
+            assert vfTexture != null;
+            vfTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            Surface vfSurface = new Surface(vfTexture);
 
-            // This is the output Surface we need to start preview.
-            Surface surface = new Surface(texture);
+            Surface pipSurface = null;
+            if (mPIPTextureView != null && mPIPTextureView.isAvailable()) {
+                SurfaceTexture pipTexture = mPIPTextureView.getSurfaceTexture();
+                assert pipTexture != null;
+                // TODO: It'll be nice to compute that properly
+                pipTexture.setDefaultBufferSize(mPreviewSize.getWidth() / 4, mPreviewSize.getHeight() / 4);
+                pipSurface = new Surface(pipTexture);
+            }
 
             // We set up a CaptureRequest.Builder with the output Surface.
             mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_MANUAL);
-            mPreviewRequestBuilder.addTarget(surface);
+            mPreviewRequestBuilder.addTarget(vfSurface);
+
+            List<Surface> surfaces = new ArrayList<>();
+            surfaces.add(vfSurface);
+
+            if (pipSurface != null) {
+                mPreviewRequestBuilder.addTarget(pipSurface);
+                surfaces.add(pipSurface);
+            }
+
+            surfaces.add(mImageReader.getSurface());
 
             // Here, we create a CameraCaptureSession for camera preview.
-            mCameraDevice.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()),
+            mCameraDevice.createCaptureSession(surfaces,
                     new CameraCaptureSession.StateCallback() {
 
                         @Override
                         public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
                             // The camera is already closed
-                            if (null == mCameraDevice) {
+                            if (mCameraDevice == null) {
                                 return;
                             }
 
@@ -863,17 +1032,26 @@ public class Camera2Fragment extends Fragment {
         }
     }
 
+    private void configureViewFinderTransform(int viewWidth, int viewHeight) {
+        configureTransform(mTextureView, viewWidth, viewHeight);
+    }
+
+    private void configurePIPTransform(int viewWidth, int viewHeight) {
+        configureTransform(mPIPTextureView, viewWidth, viewHeight);
+    }
+
     /**
      * Configures the necessary {@link Matrix} transformation to `mTextureView`.
      * This method should be called after the camera preview size is determined in
      * setUpCameraOutputs and also the size of `mTextureView` is fixed.
      *
+     * @param textureView  The width of `mTextureView`
      * @param viewWidth  The width of `mTextureView`
      * @param viewHeight The height of `mTextureView`
      */
-    private void configureTransform(int viewWidth, int viewHeight) {
+    private void configureTransform(TextureView textureView, int viewWidth, int viewHeight) {
         Activity activity = getActivity();
-        if (null == mTextureView || null == mPreviewSize || null == activity) {
+        if (null == textureView || null == mPreviewSize || null == activity) {
             return;
         }
 
@@ -904,11 +1082,23 @@ public class Camera2Fragment extends Fragment {
             scale = new PointF(1f, (viewRect.width() / viewRect.height()) * ((float) bufferRect.width() / (float) bufferRect.height()));
         }
 
+        if (textureView == mPIPTextureView) {
+            Log.e(TAG, "ar: " + viewAspectRatio + ", iar: " + imageAspectRatio + ", scaleX: " + scale.x + ", scaleY: " + scale.y);
+        } else {
+            Log.e(TAG, "main: ar: " + viewAspectRatio + ", iar: " + imageAspectRatio + ", scaleX: " + scale.x + ", scaleY: " + scale.y);
+        }
+
         if (rotationDegrees % 180 != 0) {
             // If we need to rotate the texture 90º we need to adjust the scale
             float multiplier = viewAspectRatio < imageAspectRatio ? w/h : h/w;
             scale.x *= multiplier;
             scale.y *= multiplier;
+
+            if (textureView == mPIPTextureView) {
+                Log.e(TAG, "multiplier: " + multiplier + ", scaleX: " + scale.x + ", scaleY: " + scale.y);
+            } else {
+                Log.e(TAG, "main: multiplier: " + multiplier + ", scaleX: " + scale.x + ", scaleY: " + scale.y);
+            }
         }
 
         Matrix matrix = new Matrix();
@@ -919,7 +1109,7 @@ public class Camera2Fragment extends Fragment {
             matrix.postRotate(-rotationDegrees, viewRect.centerX(), viewRect.centerY());
         }
         // Transform the texture
-        mTextureView.setTransform(matrix);
+        textureView.setTransform(matrix);
     }
 
     private int getDisplayRotation() {
