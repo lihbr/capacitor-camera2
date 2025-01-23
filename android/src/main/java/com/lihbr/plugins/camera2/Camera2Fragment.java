@@ -989,7 +989,6 @@ public class Camera2Fragment extends Fragment {
         setCaptureBuilderSs(captureBuilder);
         setCaptureBuilderAperture(captureBuilder);
         setCaptureBuilderIso(captureBuilder);
-        setCaptureBuilderSs(captureBuilder);
         setCaptureBuilderExposureCompensation(captureBuilder);
         setCaptureBuilderFocus(captureBuilder);
 
